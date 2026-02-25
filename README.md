@@ -38,15 +38,17 @@ Using the `slicewrap::wrap!` macro generates this type for you as well as all
 the boilerplate for creating and working with it:
 
 ```rust
-slicewrap::wrap!(
+slicewrap::wrap! {
     /// A string that is guaranteed to be uppercase only.
-    #[repr(transparent)]
+    ///
+    /// NOTE: `UppercaseStr` will be `#[repr(transparent)]` automatically.
+    #[derive(Debug)]
     pub struct UppercaseStr(str);
 }
 ```
 
 Aside from generating useful trait implementations for the generated type, such
-as `Debug`, `AsRef<str>`, `PartialEq<str>` and others, this will generate two
+as `Display`, `AsRef<str>`, `PartialEq<str>` and others, this will generate two
 constructor functions, that will be **private to the module where this macro is
 invoked**.
 These will be `UppercaseStr::from_ref` and `UppercaseStr::from_ref_mut`.
@@ -59,7 +61,7 @@ impl UppercaseStr {
         if string.chars().all(|c| c.is_uppercase()) {
             // use the private `from_ref` here, which can only be
             // called in the module the macro was invoked in and
-            // its sub modules
+            // its sub modules.
             Some(Self::from_ref(string))
         } else {
             None
@@ -72,9 +74,10 @@ impl UppercaseStr {
 
 This project is licensed under either of
 
- * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
-   https://www.apache.org/licenses/LICENSE-2.0)
- * MIT license ([LICENSE-MIT](LICENSE-MIT) or
-   https://opensource.org/licenses/MIT)
+* [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+  ([LICENSE-APACHE](LICENSE-APACHE))
+
+* [MIT License](https://opensource.org/licenses/MIT)
+  ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.

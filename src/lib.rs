@@ -1,4 +1,4 @@
-//! `slicewrap` - A macro for transparently wrapping slices.
+//! `slicewrap` - A macro for transparently wrapping slices in a type-safe manner.
 //!
 //! This crate provides a single macro for generating unit structs wrapping
 //! (unsized) slices or strings with safe conversion functions.
@@ -28,9 +28,8 @@ pub mod __alloc {
     pub use alloc::sync::Arc;
 }
 
-/// A macro for generating the (partially unsafe) boilerpate code required for
-/// transparent newtype unit struct wrappers around unsized slices (`[T]`) and
-/// `str`s.
+/// A macro for generating the boilerpate code required for transparent newtype
+/// unit struct wrappers around unsized slices (`[T]`) and `str`s.
 ///
 /// For wrappers around [`str`], implementations for [`Display`](core::fmt::Display)
 /// as well as direct comparisons with raw strings are also generated for
@@ -93,8 +92,12 @@ pub mod __alloc {
 /// lifetimes.
 #[macro_export]
 macro_rules! wrap {
-    // entry point for `str` slice wrappers (generates extra conversion &
-    // comparison methods)
+    // The entry point for any slice wrapper type.
+    ($(#[$attr:meta])* $vis:vis struct $name:ident([$type:ty]) $(, from = [$($from:ident),*])? $(;)?) => {
+        $crate::wrap!(@inner $(#[$attr])* $vis struct $name ([$type]) $(, from = [$($from),*])?);
+    };
+    // The entry point for `str` slice wrappers (generates extra conversion &
+    // comparison methods).
     ($(#[$attr:meta])* $vis:vis struct $name:ident(str) $(, from = [$($from:ident),*])? $(;)?) => {
         $crate::wrap!(@inner $(#[$attr])* $vis struct $name(str) $(, from = [$($from),*])?);
 
@@ -122,11 +125,7 @@ macro_rules! wrap {
             }
         }
     };
-    // entry point for any slice wrapper type
-    ($(#[$attr:meta])* $vis:vis struct $name:ident([$type:ty]) $(, from = [$($from:ident),*])? $(;)?) => {
-        $crate::wrap!(@inner $(#[$attr])* $vis struct $name ([$type]) $(, from = [$($from),*])?);
-    };
-    // internal: generates base declarations and then any optional conversions
+    // internal: Generates base declarations and then any optional conversions.
     (@inner $(#[$attr:meta])* $vis:vis struct $name:ident ($type:ty) $(, from = [$($from:ident),*])? $(;)?) => {
         $crate::wrap!(@inner_base $(#[$attr])* $vis struct $name ($type));
 
@@ -134,10 +133,9 @@ macro_rules! wrap {
             $crate::wrap!(@inner_from $name $from $type);
         )*)?
     };
-    // internal: generates base declarations
+    // internal: Generates base declarations.
     (@inner_base $(#[$attr:meta])* $vis:vis struct $name:ident ($type:ty)) => {
         $(#[$attr])*
-        //#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
         #[repr(transparent)]
         $vis struct $name ($type);
 
@@ -145,13 +143,13 @@ macro_rules! wrap {
             #[allow(unused)]
             const fn from_ref(reference: &$type) -> &Self {
                 // SAFETY: the wrapper is a transparent newtype
-                unsafe { &*(reference as *const $type as *const Self) }
+                unsafe { core::mem::transmute(reference) }
             }
 
             #[allow(unused)]
             fn from_ref_mut(reference: &mut $type) -> &mut Self {
                 // SAFETY: the wrapper is a transparent newtype
-                unsafe { &mut *(reference as *mut $type as *mut Self) }
+                unsafe { core::mem::transmute(reference) }
             }
 
             const fn as_inner(&self) -> &$type {
@@ -189,13 +187,14 @@ macro_rules! wrap {
             }
         }
     };
-    // generates from/into functions for conversion of `Box` slices
+    // Generates from/into functions for conversion of `Box` slices.
     (@inner_from $name:ident Box $type:ty) => {
         impl $name {
             const fn from_boxed(
                 boxed: $crate::__alloc::Box<$type>
             ) -> $crate::__alloc::Box<Self>
             {
+                // SAFETY: the wrapper is a transparent newtype
                 unsafe { core::mem::transmute(boxed) }
             }
 
@@ -204,7 +203,8 @@ macro_rules! wrap {
                 self: $crate::__alloc::Box<Self>
             ) -> $crate::__alloc::Box<$type>
             {
-                unsafe { core::mem::transmute(self) }
+               // SAFETY: the wrapper is a transparent newtype
+               unsafe { core::mem::transmute(self) }
             }
         }
 
@@ -215,12 +215,13 @@ macro_rules! wrap {
             }
         }
     };
-    // generates from/into functions for conversion of `Rc` slices
+    // Generates from/into functions for conversion of `Rc` slices.
     (@inner_from $name:ident Rc $type:ty) => {
         impl $name {
             const fn from_rc(
                 rc: $crate::__alloc::Rc<$type>
             ) -> $crate::__alloc::Rc<Self> {
+                // SAFETY: the wrapper is a transparent newtype
                 unsafe { core::mem::transmute(rc) }
             }
 
@@ -228,16 +229,18 @@ macro_rules! wrap {
             const fn into_rc(
                 self: $crate::__alloc::Rc<Self>
             ) -> $crate::__alloc::Rc<$type> {
+                // SAFETY: the wrapper is a transparent newtype
                 unsafe { core::mem::transmute(self) }
             }
         }
     };
-    // generates from/into functions for conversion of `Arc` slices
+    // Generates from/into functions for conversion of `Arc` slices.
     (@inner_from $name:ident Arc $type:ty) => {
         impl $name {
             const fn from_arc(
                 arc: $crate::__alloc::Arc<$type>
             ) -> $crate::__alloc::Arc<Self> {
+                // SAFETY: the wrapper is a transparent newtype
                 unsafe { core::mem::transmute(arc) }
             }
 
@@ -245,14 +248,15 @@ macro_rules! wrap {
             const fn into_arc(
                 self: $crate::__alloc::Arc<Self>
             ) -> $crate::__alloc::Arc<$type> {
+                // SAFETY: the wrapper is a transparent newtype
                 unsafe { core::mem::transmute(self) }
             }
         }
     }
 }
 
-/// A macro for making matchin on optional wrapped types created with
-/// `slicewrap::wrap` easier.
+/// A macro for ergonomic matching on optional wrapped types created with
+/// `slicewrap::wrap`.
 ///
 /// # Examples
 ///
@@ -301,7 +305,7 @@ mod tests {
     use std::{rc::Rc, sync::Arc};
 
     super::wrap!(
-        /// Some documentation
+        /// Some documentation.
         #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
         pub struct Simple(str)
     );
@@ -310,6 +314,7 @@ mod tests {
         #[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
         struct Heapable(str), from = [Box, Rc]
     );
+
     super::wrap!(pub struct SliceWrap([u8]), from = [Arc, Box, Rc]);
 
     impl Heapable {
